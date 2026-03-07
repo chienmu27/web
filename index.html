@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>chienmu27管理首頁</title>
+<title>個人網頁管理首頁</title>
 
 <style>
   :root {
@@ -90,7 +90,7 @@
     text-decoration: none; border-radius: 6px; font-size: 13px;
   }
   
-  .status-msg { font-size: 12px; margin-top: 10px; color: #888; text-align: center; }
+  .status-msg { font-size: 12px; margin-top: 10px; color: #888; text-align: center; height: 15px; }
 </style>
 </head>
 
@@ -98,10 +98,11 @@
 
 <div class="header-container">
     <button class="auth-btn btn-login-trigger" id="loginBtn" onclick="toggleLoginModal(true)">管理員登入</button>
-    <h1>chienmu27管理首頁</h1>
+    <h1>個人網頁管理系統</h1>
     <button class="auth-btn btn-logout" id="logoutBtn" onclick="logout()">登出</button>
 </div>
 
+<!-- 管理面板 -->
 <div class="admin-panel" id="adminPanel">
   <h3>➕ 加入新網址</h3>
   <div class="form-group">
@@ -138,6 +139,7 @@
 
 <script>
 // ================= 設定區域 =================
+// ⚠️ 務必在此貼上您部署後的 GAS Web App 網址
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwmhzi4wTLJvNuuQXJX57H_rOV6V2DDRhp36H0zV4Qm4D279u3Zcam9lzXGZNzthOF_-Q/exec"; 
 const LOGIN_KEY = "sds_admin_logged_in";
 const CACHE_KEY = "sds_portal_cache";
@@ -192,6 +194,7 @@ function formatUrl(url) {
 function updateCategorySuggestions() {
   const datalist = document.getElementById('categoryList');
   if (!datalist) return;
+  // 取得不重複的分類
   const categories = [...new Set(siteData.map(item => item.category))];
   datalist.innerHTML = categories.map(cat => `<option value="${cat}">`).join('');
 }
@@ -266,9 +269,9 @@ async function deleteLink(category, name, url, isQuiet = false) {
   }
 }
 
-// 修改功能：彈出提示 -> 填入欄位 -> 從雲端移除
+// 修改功能：僅出現一次提示，隨後載入欄位並從雲端刪除
 async function editLink(category, name, url) {
-    // 1. 彈出指定提示框
+    // 1. 唯一提示框
     if (!confirm("修改時會先刪除，確定嗎？")) return;
 
     // 2. 將資料填回上方輸入框
@@ -279,11 +282,11 @@ async function editLink(category, name, url) {
     // 3. 捲動回頂部以便編輯
     window.scrollTo({ top: 0, behavior: 'smooth' });
     
-    // 4. 執行刪除動作 (靜默模式，不再次彈窗)
+    // 4. 執行刪除動作 (靜默模式，不再次彈窗提示)
     document.getElementById('statusMsg').innerText = "正在移除原資料並載入編輯...";
     await deleteLink(category, name, url, true);
     
-    alert("原資料已移除，請於上方修改後按下「送出並同步」。");
+    // 移除原本此處的 alert 提示
 }
 
 // ================= 登入邏輯 =================

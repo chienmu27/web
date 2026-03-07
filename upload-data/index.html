@@ -3,61 +3,61 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>雲端硬碟檔案上傳系統</title>
+  <title>雲端檔案管理系統</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
   <style>
-    body { background-color: #f0f2f5; padding-top: 40px; font-family: "Microsoft JhengHei", sans-serif; }
-    .main-card { max-width: 500px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    body { background-color: #f4f7f6; padding-top: 50px; font-family: "PingFang TC", "Heiti TC", "Microsoft JhengHei", sans-serif; }
+    .main-card { max-width: 550px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
     #uploadSection { display: none; }
     .loading-spinner { display: none; }
-    .file-hint { font-size: 0.85rem; color: #6c757d; margin-top: 5px; }
+    .file-hint { font-size: 0.8rem; color: #888; margin-top: 4px; }
   </style>
 </head>
 <body>
 
 <div class="container">
   <div class="main-card">
-    <h3 class="text-center mb-4">雲端儲存系統</h3>
+    <h3 class="text-center mb-4">雲端硬碟儲存系統</h3>
 
-    <!-- 登入介面 -->
+    <!-- 驗證區塊 -->
     <div id="loginSection">
       <div class="mb-3">
-        <label class="form-label">請輸入存取驗證碼</label>
+        <label class="form-label">管理員驗證碼</label>
         <input type="password" id="vCode" class="form-control" placeholder="請輸入密碼">
       </div>
-      <button class="btn btn-primary w-100" onclick="login()">登入系統</button>
+      <button class="btn btn-primary w-100" onclick="login()">登入</button>
     </div>
 
-    <!-- 上傳介面 -->
+    <!-- 上傳區塊 -->
     <div id="uploadSection">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <span class="badge bg-success">已連線</span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="logout()">登出</button>
+        <span class="text-success">● 系統已就緒</span>
+        <button class="btn btn-sm btn-outline-danger" onclick="logout()">登出</button>
       </div>
       <hr>
 
       <div class="mb-3">
-        <label class="form-label">目標資料夾名稱</label>
+        <label class="form-label">指定資料夾名稱</label>
         <input type="text" id="folderName" class="form-control" placeholder="#上傳資料">
-        <small class="text-muted">留空則自動存入 "#上傳資料"</small>
+        <small class="text-muted">若同名檔案已存在，系統將自動覆蓋舊檔</small>
       </div>
 
       <div class="mb-3">
         <label class="form-label">選擇檔案</label>
         <input type="file" id="fileInput" class="form-control" 
                accept=".jpg,.jpeg,.gif,.png,.svg,.tiff,.webp,.doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx">
-        <div class="file-hint">支援格式：圖片、PDF、Office 文件</div>
+        <div class="file-hint">支援格式：圖片、Word、Excel、PPT、PDF</div>
       </div>
 
-      <button class="btn btn-success w-100" id="uploadBtn" onclick="handleUpload()">開始上傳</button>
+      <button class="btn btn-success w-100" id="uploadBtn" onclick="handleUpload()">上傳並覆蓋舊檔</button>
 
-      <!-- 讀取狀態 -->
+      <!-- 讀取動畫 -->
       <div class="loading-spinner text-center mt-3" id="loader">
         <div class="spinner-border text-primary" role="status"></div>
-        <p class="mt-2">正在處理檔案，請勿關閉視窗...</p>
+        <p class="mt-2 text-primary">檔案處理中，請稍候...</p>
       </div>
 
-      <!-- 結果顯示 -->
+      <!-- 結果提示 -->
       <div id="result" class="mt-3"></div>
     </div>
   </div>
@@ -65,11 +65,11 @@
 
 <script>
   /**
-   * 重要：請在此處填入你部署後取得的 GAS 網址
+   * 重要：請在此處更換為您的 GAS 部署網址
    */
   const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxEJsbs608_LJZwNN5FbRpxL8QDrZsO31R-SV3dpq5LV2jmvYUSBqghH32ljaPNnai7/exec"; 
 
-  // 1. 登入邏輯
+  // 1. 登入
   function login() {
     const code = document.getElementById('vCode').value;
     if(!code) return alert("請輸入驗證碼");
@@ -84,7 +84,7 @@
     });
   }
 
-  // 2. 上傳邏輯
+  // 2. 上傳
   function handleUpload() {
     const fileInput = document.getElementById('fileInput');
     const folderName = document.getElementById('folderName').value;
@@ -97,7 +97,6 @@
     const file = fileInput.files[0];
     const reader = new FileReader();
 
-    // UI 狀態切換
     loader.style.display = 'block';
     uploadBtn.disabled = true;
     resultDiv.innerHTML = "";
@@ -108,7 +107,7 @@
         data: e.target.result,
         fileName: file.name,
         mimeType: file.type,
-        folderName: folderName // 如果是空的，後端會自動處理
+        folderName: folderName
       };
 
       sendRequest(payload, function(res) {
@@ -118,38 +117,22 @@
         if (res.success) {
           resultDiv.innerHTML = `
             <div class="alert alert-success">
-              上傳成功！<br>
-              資料夾：${res.folderUsed}<br>
-              檔名：<a href="${res.url}" target="_blank">${res.name}</a>
+              <strong>上傳成功！</strong><br>
+              位置：${res.folderUsed}<br>
+              連結：<a href="${res.url}" target="_blank">點此查看檔案</a><br>
+              <small>${res.note}</small>
             </div>`;
-          fileInput.value = ""; // 清空選取
+          fileInput.value = ""; 
         } else {
-          resultDiv.innerHTML = `<div class="alert alert-danger">錯誤：${res.message}</div>`;
+          resultDiv.innerHTML = `<div class="alert alert-danger">失敗：${res.message}</div>`;
         }
       });
     };
-
-    reader.onerror = function() {
-      alert("讀取檔案失敗");
-      loader.style.display = 'none';
-      uploadBtn.disabled = false;
-    };
-
     reader.readAsDataURL(file);
   }
 
-  // 3. 跨網域傳輸工具
+  // 3. 請求工具
   function sendRequest(data, callback) {
-    fetch(GAS_WEB_APP_URL, {
-      method: "POST",
-      mode: "no-cors", // 注意：GAS 跨網域 POST 雖然會回傳成功，但在瀏覽器中無法直接讀取 response
-      body: JSON.stringify(data)
-    })
-    /**
-     * 由於 GAS 重新導向與 CORS 的特性，
-     * 這裡建議 GAS 使用 ContentService 回傳。
-     * 為了穩定性，我們使用標準 fetch 流程：
-     */
     fetch(GAS_WEB_APP_URL, {
       method: "POST",
       body: JSON.stringify(data)
@@ -158,7 +141,7 @@
     .then(callback)
     .catch(err => {
       console.error(err);
-      alert("連線失敗。請確認 GAS 已部署為「任何人」均可存取，且網址正確。");
+      alert("連線至 Google 伺服器失敗，請檢查部署網址與權限設定。");
       document.getElementById('loader').style.display = 'none';
       document.getElementById('uploadBtn').disabled = false;
     });
@@ -169,6 +152,5 @@
     location.reload();
   }
 </script>
-
 </body>
 </html>

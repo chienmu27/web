@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>雲端硬碟檔案上傳系統</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+  <style>
+    body { background-color: #f0f2f5; padding-top: 40px; font-family: "Microsoft JhengHei", sans-serif; }
+    .main-card { max-width: 500px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    #uploadSection { display: none; }
+    .loading-spinner { display: none; }
+    .file-hint { font-size: 0.85rem; color: #6c757d; margin-top: 5px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="main-card">
+    <h3 class="text-center mb-4">雲端儲存系統</h3>
+
+    <!-- 登入介面 -->
+    <div id="loginSection">
+      <div class="mb-3">
+        <label class="form-label">請輸入存取驗證碼</label>
+        <input type="password" id="vCode" class="form-control" placeholder="請輸入密碼">
+      </div>
+      <button class="btn btn-primary w-100" onclick="login()">登入系統</button>
+    </div>
+
+    <!-- 上傳介面 -->
+    <div id="uploadSection">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="badge bg-success">已連線</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="logout()">登出</button>
+      </div>
+      <hr>
+
+      <div class="mb-3">
+        <label class="form-label">目標資料夾名稱</label>
+        <input type="text" id="folderName" class="form-control" placeholder="#上傳資料">
+        <small class="text-muted">留空則自動存入 "#上傳資料"</small>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">選擇檔案</label>
+        <input type="file" id="fileInput" class="form-control" 
+               accept=".jpg,.jpeg,.gif,.png,.svg,.tiff,.webp,.doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx">
+        <div class="file-hint">支援格式：圖片、PDF、Office 文件</div>
+      </div>
+
+      <button class="btn btn-success w-100" id="uploadBtn" onclick="handleUpload()">開始上傳</button>
+
+      <!-- 讀取狀態 -->
+      <div class="loading-spinner text-center mt-3" id="loader">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2">正在處理檔案，請勿關閉視窗...</p>
+      </div>
+
+      <!-- 結果顯示 -->
+      <div id="result" class="mt-3"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /**
+   * 重要：請在此處填入你部署後取得的 GAS 網址
+   */
+  const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxEJsbs608_LJZwNN5FbRpxL8QDrZsO31R-SV3dpq5LV2jmvYUSBqghH32ljaPNnai7/exec"; 
+
+  // 1. 登入邏輯
+  function login() {
+    const code = document.getElementById('vCode').value;
+    if(!code) return alert("請輸入驗證碼");
+
+    sendRequest({ action: 'verify', code: code }, function(res) {
+      if (res.success) {
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('uploadSection').style.display = 'block';
+      } else {
+        alert(res.message);
+      }
+    });
+  }
+
+  // 2. 上傳邏輯
+  function handleUpload() {
+    const fileInput = document.getElementById('fileInput');
+    const folderName = document.getElementById('folderName').value;
+    const resultDiv = document.getElementById('result');
+    const loader = document.getElementById('loader');
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    if (fileInput.files.length === 0) return alert("請先選取檔案");
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    // UI 狀態切換
+    loader.style.display = 'block';
+    uploadBtn.disabled = true;
+    resultDiv.innerHTML = "";
+
+    reader.onload = function(e) {
+      const payload = {
+        action: 'upload',
+        data: e.target.result,
+        fileName: file.name,
+        mimeType: file.type,
+        folderName: folderName // 如果是空的，後端會自動處理
+      };
+
+      sendRequest(payload, function(res) {
+        loader.style.display = 'none';
+        uploadBtn.disabled = false;
+
+        if (res.success) {
+          resultDiv.innerHTML = `
+            <div class="alert alert-success">
+              上傳成功！<br>
+              資料夾：${res.folderUsed}<br>
+              檔名：<a href="${res.url}" target="_blank">${res.name}</a>
+            </div>`;
+          fileInput.value = ""; // 清空選取
+        } else {
+          resultDiv.innerHTML = `<div class="alert alert-danger">錯誤：${res.message}</div>`;
+        }
+      });
+    };
+
+    reader.onerror = function() {
+      alert("讀取檔案失敗");
+      loader.style.display = 'none';
+      uploadBtn.disabled = false;
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  // 3. 跨網域傳輸工具
+  function sendRequest(data, callback) {
+    fetch(GAS_WEB_APP_URL, {
+      method: "POST",
+      mode: "no-cors", // 注意：GAS 跨網域 POST 雖然會回傳成功，但在瀏覽器中無法直接讀取 response
+      body: JSON.stringify(data)
+    })
+    /**
+     * 由於 GAS 重新導向與 CORS 的特性，
+     * 這裡建議 GAS 使用 ContentService 回傳。
+     * 為了穩定性，我們使用標準 fetch 流程：
+     */
+    fetch(GAS_WEB_APP_URL, {
+      method: "POST",
+      body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(callback)
+    .catch(err => {
+      console.error(err);
+      alert("連線失敗。請確認 GAS 已部署為「任何人」均可存取，且網址正確。");
+      document.getElementById('loader').style.display = 'none';
+      document.getElementById('uploadBtn').disabled = false;
+    });
+  }
+
+  // 4. 登出
+  function logout() {
+    location.reload();
+  }
+</script>
+
+</body>
+</html>

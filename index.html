@@ -82,7 +82,7 @@
     background: none; border: none; cursor: pointer; font-size: 16px;
     padding: 2px 5px; border-radius: 4px; transition: 0.2s; display: none;
   }
-  .btn-edit:hover { background: #fff9db; color: var(--warning-color); }
+  .btn-edit:hover { background: #fff9db; color: #e67e22; }
   .btn-delete:hover { background: #fff1f0; color: var(--danger-color); }
 
   .links a {
@@ -107,7 +107,6 @@
   <div class="form-group">
     <div class="input-item">
       <label>網頁分類</label>
-      <!-- 加入 list 屬性連接 datalist -->
       <input type="text" id="catInput" placeholder="分類名稱" list="categoryList">
       <datalist id="categoryList"></datalist>
     </div>
@@ -192,7 +191,8 @@ function formatUrl(url) {
 // 更新分類建議清單 (Datalist)
 function updateCategorySuggestions() {
   const datalist = document.getElementById('categoryList');
-  const categories = siteData.map(item => item.category);
+  if (!datalist) return;
+  const categories = [...new Set(siteData.map(item => item.category))];
   datalist.innerHTML = categories.map(cat => `<option value="${cat}">`).join('');
 }
 
@@ -266,20 +266,24 @@ async function deleteLink(category, name, url, isQuiet = false) {
   }
 }
 
-// 修改功能：填入欄位並從雲端移除原資料
+// 修改功能：彈出提示 -> 填入欄位 -> 從雲端移除
 async function editLink(category, name, url) {
-    // 1. 將資料填回輸入框
+    // 1. 彈出指定提示框
+    if (!confirm("修改時會先刪除，確定嗎？")) return;
+
+    // 2. 將資料填回上方輸入框
     document.getElementById('catInput').value = category;
     document.getElementById('nameInput').value = name;
     document.getElementById('urlInput').value = url;
     
-    // 2. 捲動回頁面頂端方便編輯
+    // 3. 捲動回頂部以便編輯
     window.scrollTo({ top: 0, behavior: 'smooth' });
     
-    // 3. 從雲端移除該筆資料 (靜默模式，不跳提示)
+    // 4. 執行刪除動作 (靜默模式，不再次彈窗)
+    document.getElementById('statusMsg').innerText = "正在移除原資料並載入編輯...";
     await deleteLink(category, name, url, true);
     
-    document.getElementById('statusMsg').innerText = "已載入資料至編輯區，原資料已預先移除。";
+    alert("原資料已移除，請於上方修改後按下「送出並同步」。");
 }
 
 // ================= 登入邏輯 =================

@@ -10,6 +10,7 @@
     --primary-color: #007bff;
     --success-color: #28a745;
     --danger-color: #dc3545;
+    --warning-color: #ffc107;
     --bg-color: #f4f6f9;
   }
 
@@ -31,7 +32,6 @@
 
   h1 { margin: 0; flex-grow: 1; text-align: center; }
 
-  /* 登入登出按鈕 */
   .auth-btn {
     padding: 8px 16px; border-radius: 6px; border: none;
     cursor: pointer; font-weight: bold; transition: 0.2s;
@@ -39,7 +39,6 @@
   .btn-login-trigger { background: var(--primary-color); color: white; }
   .btn-logout { background: var(--danger-color); color: white; display: none; }
 
-  /* 管理面板 */
   .admin-panel {
     max-width: 900px; margin: 0 auto 30px auto; background: white;
     padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
@@ -61,7 +60,6 @@
     border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;
   }
 
-  /* 登入視窗 */
   .login-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center;
@@ -70,23 +68,22 @@
   .login-box { background: white; padding: 30px; border-radius: 12px; width: 300px; text-align: center; }
   .login-box input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ddd; border-radius: 6px; }
 
-  /* 容器與卡片 */
   .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
   .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); width: 310px; }
   .card h2 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 1.2rem; }
 
-  /* 項目樣式 */
   .section { margin: 12px 0; padding-bottom: 8px; border-bottom: 1px dashed #f0f0f0; }
   .section:last-child { border-bottom: none; }
   .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .section-title { font-weight: bold; color: #444; font-size: 0.95rem; }
 
-  /* 項目刪除按鈕 (預設隱藏，登入後透過 JS 控制顯示) */
-  .btn-item-delete {
-    background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px;
+  .action-btns { display: flex; gap: 5px; }
+  .btn-action {
+    background: none; border: none; cursor: pointer; font-size: 16px;
     padding: 2px 5px; border-radius: 4px; transition: 0.2s; display: none;
   }
-  .btn-item-delete:hover { color: var(--danger-color); background: #fff1f0; }
+  .btn-edit:hover { background: #fff9db; color: var(--warning-color); }
+  .btn-delete:hover { background: #fff1f0; color: var(--danger-color); }
 
   .links a {
     display: inline-block; padding: 6px 12px; background: var(--primary-color); color: white;
@@ -110,7 +107,9 @@
   <div class="form-group">
     <div class="input-item">
       <label>網頁分類</label>
-      <input type="text" id="catInput" placeholder="分類名稱">
+      <!-- 加入 list 屬性連接 datalist -->
+      <input type="text" id="catInput" placeholder="分類名稱" list="categoryList">
+      <datalist id="categoryList"></datalist>
     </div>
     <div class="input-item">
       <label>網頁名稱</label>
@@ -152,6 +151,7 @@ function init() {
   if (cache) {
     siteData = JSON.parse(cache);
     render();
+    updateCategorySuggestions();
   }
   loadFromSheet();
   if (localStorage.getItem(LOGIN_KEY) === "true") showAdminUI(true);
@@ -166,6 +166,7 @@ async function loadFromSheet() {
       siteData = processSheetData(result.tableData);
       localStorage.setItem(CACHE_KEY, JSON.stringify(siteData));
       render();
+      updateCategorySuggestions();
       document.getElementById('statusMsg').innerText = "雲端同步完成";
     }
   } catch (e) {
@@ -188,6 +189,13 @@ function formatUrl(url) {
   return (url.startsWith('http') || url.startsWith('/') || url.includes('./')) ? url : 'https://' + url;
 }
 
+// 更新分類建議清單 (Datalist)
+function updateCategorySuggestions() {
+  const datalist = document.getElementById('categoryList');
+  const categories = siteData.map(item => item.category);
+  datalist.innerHTML = categories.map(cat => `<option value="${cat}">`).join('');
+}
+
 function render() {
   const container = document.getElementById('cardContainer');
   const isLoggedIn = localStorage.getItem(LOGIN_KEY) === "true";
@@ -199,10 +207,16 @@ function render() {
         <div class="section">
           <div class="section-header">
             <div class="section-title">${sec.title}</div>
-            <button class="btn-item-delete" 
-                    style="display: ${isLoggedIn ? 'block' : 'none'}" 
-                    onclick="deleteLink('${catObj.category}', '${sec.title}', '${sec.url}')" 
-                    title="刪除此項目">🗑️</button>
+            <div class="action-btns">
+                <button class="btn-action btn-edit" 
+                        style="display: ${isLoggedIn ? 'block' : 'none'}" 
+                        onclick="editLink('${catObj.category.replace(/'/g, "\\'")}', '${sec.title.replace(/'/g, "\\'")}', '${sec.url}')" 
+                        title="修改項目">✏️</button>
+                <button class="btn-action btn-delete" 
+                        style="display: ${isLoggedIn ? 'block' : 'none'}" 
+                        onclick="deleteLink('${catObj.category.replace(/'/g, "\\'")}', '${sec.title.replace(/'/g, "\\'")}', '${sec.url}')" 
+                        title="刪除項目">🗑️</button>
+            </div>
           </div>
           <div class="links">
             <a href="${sec.url}" target="_blank" rel="noopener noreferrer">前往系統</a>
@@ -234,10 +248,10 @@ async function addLink() {
   } catch (e) { alert("同步失敗"); }
 }
 
-async function deleteLink(category, name, url) {
-  if (!confirm(`確定要刪除「${name}」嗎？`)) return;
+async function deleteLink(category, name, url, isQuiet = false) {
+  if (!isQuiet && !confirm(`確定要刪除「${name}」嗎？`)) return;
 
-  document.getElementById('statusMsg').innerText = "正在從雲端刪除...";
+  document.getElementById('statusMsg').innerText = "正在作業中...";
   try {
     const response = await fetch(GAS_URL, {
       method: "POST",
@@ -245,11 +259,27 @@ async function deleteLink(category, name, url) {
     });
     const result = await response.json();
     if (result.result === "deleted") {
-      await loadFromSheet(); // 重新載入最新資料
+      await loadFromSheet(); 
     }
   } catch (e) {
-    alert("刪除失敗，請檢查網路。");
+    if(!isQuiet) alert("連線失敗");
   }
+}
+
+// 修改功能：填入欄位並從雲端移除原資料
+async function editLink(category, name, url) {
+    // 1. 將資料填回輸入框
+    document.getElementById('catInput').value = category;
+    document.getElementById('nameInput').value = name;
+    document.getElementById('urlInput').value = url;
+    
+    // 2. 捲動回頁面頂端方便編輯
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // 3. 從雲端移除該筆資料 (靜默模式，不跳提示)
+    await deleteLink(category, name, url, true);
+    
+    document.getElementById('statusMsg').innerText = "已載入資料至編輯區，原資料已預先移除。";
 }
 
 // ================= 登入邏輯 =================
@@ -265,7 +295,7 @@ function checkLogin() {
         localStorage.setItem(LOGIN_KEY, "true");
         showAdminUI(true);
         toggleLoginModal(false);
-        render(); // 重新渲染以顯示刪除按鈕
+        render(); 
     } else {
         alert("驗證碼錯誤！");
     }
@@ -274,7 +304,7 @@ function checkLogin() {
 function logout() {
     localStorage.removeItem(LOGIN_KEY);
     showAdminUI(false);
-    render(); // 重新渲染以隱藏刪除按鈕
+    render(); 
 }
 
 function showAdminUI(isLogin) {

@@ -29,8 +29,10 @@
   .admin-panel {
     max-width: 900px; margin: 0 auto 30px auto; background: white;
     padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    display: none;
+    display: none; animation: fadeIn 0.3s;
   }
+
+  .admin-panel h3 { margin-top: 0; color: var(--primary-color); border-left: 5px solid var(--primary-color); padding-left: 10px; margin-bottom: 15px; }
 
   .form-group { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
   .input-item { display: flex; flex-direction: column; flex: 1; min-width: 180px; }
@@ -59,7 +61,7 @@
 
   .section { 
     margin: 10px 0; padding: 10px; border-bottom: 1px dashed #f0f0f0; 
-    background: #fff; border-radius: 8px; transition: 0.2s;
+    background: #fff; border-radius: 8px; transition: background 0.2s;
   }
   .section.dragging { opacity: 0.4; border: 1px solid var(--primary-color); }
   .draggable { cursor: grab; }
@@ -73,9 +75,12 @@
   .btn-delete:hover { color: var(--danger-color); }
 
   .links { pointer-events: auto; }
-  .links a { display: inline-block; padding: 5px 12px; background: var(--primary-color); color: white; text-decoration: none; border-radius: 6px; font-size: 13px; }
+  .links a { display: inline-block; padding: 5px 12px; background: var(--primary-color); color: white; text-decoration: none; border-radius: 6px; font-size: 13px; transition: 0.2s; }
+  .links a:hover { background: #0056b3; }
   
-  .status-msg { font-size: 14px; margin-bottom: 15px; color: var(--primary-color); text-align: center; font-weight: bold; height: 20px; }
+  .status-msg { font-size: 14px; margin-bottom: 15px; color: #007bff; text-align: center; font-weight: bold; height: 20px; }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 </style>
 </head>
 
@@ -111,7 +116,7 @@
 
 <div class="container" id="cardContainer"></div>
 
-<!-- 登入彈窗 -->
+<!-- 登入視窗 -->
 <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
         <h3>管理員驗證</h3>
@@ -130,7 +135,7 @@ const CACHE_KEY = "sds_portal_cache";
 let siteData = [];
 let correctAuthCode = "";
 
-// 初始化
+// 啟動初始化
 function init() {
   const cache = localStorage.getItem(CACHE_KEY);
   if (cache) {
@@ -142,21 +147,21 @@ function init() {
   if (localStorage.getItem(LOGIN_KEY) === "true") showAdminUI(true);
 }
 
-// 雲端同步
+// 雲端讀取資料 (J1 為驗證碼來源)
 async function loadFromSheet() {
   try {
     const response = await fetch(GAS_URL);
     const result = await response.json();
-    correctAuthCode = result.authCode;
+    correctAuthCode = result.authCode; // 這裏拿到的是從試算表 J1 抓取的值
     if (result.tableData) {
       siteData = processSheetData(result.tableData);
       localStorage.setItem(CACHE_KEY, JSON.stringify(siteData));
       render();
       updateCategorySuggestions();
-      setStatus("✅ 資料同步完成", 2000);
+      setStatus("✅ 雲端同步完成", 2000);
     }
   } catch (e) {
-    setStatus("❌ 連線失敗，使用快取資料", 3000);
+    setStatus("❌ 連線雲端失敗，目前為離線狀態", 3000);
   }
 }
 
@@ -164,7 +169,6 @@ function processSheetData(rows) {
   const categories = {};
   for (let i = 1; i < rows.length; i++) {
     const [cat, name, url] = rows[i];
-    // 如果 A, B, C 有任一欄位為空 (表示是被 clearContent 的列)，則跳過
     if (!cat || !name || !url) continue;
     if (!categories[cat]) categories[cat] = { category: cat, sections: [] };
     categories[cat].sections.push({ title: name, url: formatUrl(url) });
@@ -186,11 +190,13 @@ function updateCategorySuggestions() {
   datalist.innerHTML = categories.map(cat => `<option value="${cat}">`).join('');
 }
 
-// --- 拖曳換分類 ---
+// --- 拖曳功能處理 ---
+
 function onDragStart(e, cat, name, url) {
     e.target.classList.add('dragging');
     e.dataTransfer.setData("text", JSON.stringify({ oldCategory: cat, name: name, url: url }));
 }
+
 function onDragEnd(e) { e.target.classList.remove('dragging'); }
 function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
 function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
@@ -203,23 +209,24 @@ async function onDrop(e, newCategory) {
     const data = JSON.parse(rawData);
     if (data.oldCategory === newCategory) return;
 
-    // 先在本地做樂觀更新
-    optimisticMove(data.oldCategory, newCategory, data.name, data.url);
-    setStatus("⏳ 正在修改雲端分類...");
+    // 優化：樂觀更新 UI
+    optimisticUpdate(data.oldCategory, newCategory, data.name, data.url);
+    setStatus("⏳ 正在修改試算表分類...");
 
     try {
         await fetch(GAS_URL, {
             method: "POST",
             body: JSON.stringify({ action: "update", oldCategory: data.oldCategory, newCategory: newCategory, name: data.name, url: data.url })
         });
-        setStatus("✅ 分類已修改", 2000);
+        setStatus("✅ 分類修改成功", 2000);
+        loadFromSheet(); // 最終與雲端再次校對
     } catch (err) {
-        setStatus("❌ 修改失敗");
-        loadFromSheet(); // 失敗則還原畫面
+        setStatus("❌ 移動失敗", 2000);
+        loadFromSheet(); 
     }
 }
 
-function optimisticMove(oldCat, newCat, name, url) {
+function optimisticUpdate(oldCat, newCat, name, url) {
     siteData.forEach(c => {
         if(c.category === oldCat) c.sections = c.sections.filter(s => !(s.title === name && s.url === url));
     });
@@ -230,7 +237,8 @@ function optimisticMove(oldCat, newCat, name, url) {
     render();
 }
 
-// --- 核心渲染 ---
+// --- 介面渲染 ---
+
 function render() {
   const container = document.getElementById('cardContainer');
   const isLoggedIn = localStorage.getItem(LOGIN_KEY) === "true";
@@ -257,7 +265,8 @@ function render() {
   `).join('');
 }
 
-// --- 管理功能 ---
+// --- 管理邏輯 ---
+
 async function addLink() {
   const cat = document.getElementById('catInput').value.trim();
   const name = document.getElementById('nameInput').value.trim();
@@ -266,13 +275,13 @@ async function addLink() {
   
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
-  setStatus("⏳ 正在寫入 A:C 欄位...");
+  setStatus("⏳ 正在寫入雲端試算表...");
 
   try {
     const formattedUrl = formatUrl(url);
     await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "add", category: cat, name: name, url: formattedUrl }) });
     
-    // 本地即時更新
+    // 即時 UI 更新
     let target = siteData.find(c => c.category === cat);
     if(target) target.sections.push({title: name, url: formattedUrl});
     else siteData.push({category: cat, sections: [{title: name, url: formattedUrl}]});
@@ -283,7 +292,8 @@ async function addLink() {
     
     render();
     updateCategorySuggestions();
-    setStatus("✅ 已寫入", 2000);
+    setStatus("✅ 加入成功", 2000);
+    loadFromSheet(); 
   } catch (e) {
     alert("連線失敗");
   } finally {
@@ -292,37 +302,33 @@ async function addLink() {
 }
 
 async function deleteLink(category, name, url, isQuiet = false) {
-  if (!isQuiet && !confirm(`修改時會先刪除，確定嗎？`)) return;
-  setStatus("⏳ 正在清除 A:C 欄位...");
+  if (!isQuiet && !confirm(`確定要刪除「${name}」嗎？`)) return;
+  setStatus("⏳ 正在從雲端移除...");
   try {
     await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "delete", category: category, name: name, url: url }) });
-    
-    // 本地移除項目
     siteData.forEach(c => {
         if(c.category === category) c.sections = c.sections.filter(s => !(s.title === name && s.url === url));
     });
     siteData = siteData.filter(c => c.sections.length > 0);
     render();
-    setStatus("✅ 欄位內容已清除", 2000);
-  } catch (e) { if(!isQuiet) alert("清除失敗"); }
+    setStatus("✅ 已移除", 2000);
+  } catch (e) { if(!isQuiet) alert("刪除失敗"); }
 }
 
 async function editLink(category, name, url) {
-    // 此處調用 deleteLink 會跳出確認框
-    const pass = confirm("修改時會先刪除，確定嗎？");
-    if(!pass) return;
-
+    if (!confirm("修改時會先刪除，確定嗎？")) return;
     document.getElementById('catInput').value = category;
     document.getElementById('nameInput').value = name;
     document.getElementById('urlInput').value = url;
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    
-    // 執行靜默刪除 (不重複跳確認)
     await deleteLink(category, name, url, true);
 }
 
+// --- 驗證邏輯 ---
+
 function toggleLoginModal(show) { document.getElementById('loginOverlay').style.display = show ? 'flex' : 'none'; }
 function checkLogin() {
+    // 比對 J1 欄位抓取的驗證碼
     if (document.getElementById('passInput').value === correctAuthCode) {
         localStorage.setItem(LOGIN_KEY, "true"); showAdminUI(true); toggleLoginModal(false); render();
     } else { alert("驗證碼錯誤！"); }
